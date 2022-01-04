@@ -13,11 +13,15 @@ The Lite Unsplash dataset is [explicitely free for commercial use](https://unspl
 
 ### Making some labelled data
 I'm following the approach from the [Synthetic Data for Text Localisation in Natural Images](https://arxiv.org/pdf/1604.06646.pdf) paper (paper that created the SynthText dataset). Due to the ultimate goal of this project not being set in the usual "real world" setting, I'm going for non DL approaches.
-#### Segmentation
-- [x] The paper corresponding to the SynthText dataset can be found [here](https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/papers/amfm_pami2010.pdf). There is no code for it though.
-- [ ] The [Image Segmentation Using Hierarchical Merge Tree paper](https://github.com/MarkMoHR/Awesome-Edge-Detection-Papers) seems to build uppon the previous paper, and does give the [C++ code](https://github.com/tingliu/glia). (would require making a python wrapping)
-- [ ] [This github](https://github.com/MarkMoHR/Awesome-Edge-Detection-Papers) contains a list of segmentation papers.
 
+#### Segmentation / Contour detection
+- [x] The paper used to generate contours for the SynthText dataset can be found [here](https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/papers/amfm_pami2010.pdf). There is no code for it though (maybe [here](https://github.com/jponttuset/mcg)).
+- [ ] The paper introducing UCM (I think) is [here](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.123.9972&rep=rep1&type=pdf).
+- [x] The [COB paper](https://arxiv.org/pdf/1701.04658v2.pdf) builds upon previous methods by adding DL to them (skimmed trough it). Code is [here](https://github.com/kmaninis/COB).
+- [ ] The [Image Segmentation Using Hierarchical Merge Tree paper](https://arxiv.org/pdf/1505.06389.pdf) seems to build uppon the previous paper, and does give the [C++ code](https://github.com/tingliu/glia). (would require making a python wrapping)
+- [ ] [This github](https://github.com/MarkMoHR/Awesome-Edge-Detection-Papers) contains a list of edge detection papers.
+
+Note: OpenCV also has a [function to detect contours](https://docs.opencv.org/3.4/df/d0d/tutorial_find_contours.html) (there is even [a tutorial](https://learnopencv.com/contour-detection-using-opencv-python-c/)). However it doesn't seem like it would be good enough.
 
 ## OCR
 ### References
@@ -42,3 +46,4 @@ I'm following the approach from the [Synthetic Data for Text Localisation in Nat
 - [Attention-based Extraction of Structured Information from Street View Imagery](https://arxiv.org/pdf/1704.03549.pdf) (2017)
 - [Python Wand](https://docs.wand-py.org/en/0.6.7/guide/draw.html#texts)   (from [this](https://stackoverflow.com/questions/68979045/how-can-i-draw-a-curved-text-using-python-converting-text-to-curved-image) stackoverflow question)
 - [List of OCR datasets](https://github.com/TianzhongSong/awesome-SynthText)
+- https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/mcg/
