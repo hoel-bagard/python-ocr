@@ -1,10 +1,10 @@
-from dataclasses import dataclass
-from pathlib import Path
-from logging import StreamHandler, handlers
-from typing import Optional
 import logging
 import os
 import sys
+from dataclasses import dataclass
+from logging import handlers, StreamHandler
+from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True, slots=True)
