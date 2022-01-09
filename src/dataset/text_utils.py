@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from src.utils.misc import clean_print
+from src.utils.misc import clean_print, show_img
 
 
 class BBox(NamedTuple):
@@ -141,11 +141,5 @@ if __name__ == "__main__":
         font = sample_font(font_dir)
         img = place_text(img, font, "hello国", debug=True)
 
-        while True:
-            cv2.imshow(img_path.name, img)
-            key = cv2.waitKey(10)
-            if key == ord("q"):
-                cv2.destroyAllWindows()
-                break
-
+        show_img(img_path.name, img)
         break
