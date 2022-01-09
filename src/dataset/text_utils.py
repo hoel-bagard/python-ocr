@@ -58,7 +58,10 @@ def render_text(font: ImageFont,
     x_offset = 0  # Tracks the place of successive characters.
     bboxes: list[tuple[int, int, int, int]] = []
     for char in text:
-        text_mask = font.getmask(char)
+        # Can't figure out to use that function.......
+        # https://pillow.readthedocs.io/en/stable/reference/ImageFont.html#PIL.ImageFont.FreeTypeFont.getmask
+        # text_mask = font.getmask(char)
+        # print(dir(text_mask))
 
         # See also: https://github.com/python-pillow/Pillow/issues/3921
         # TODO: adjust the direction
@@ -66,12 +69,20 @@ def render_text(font: ImageFont,
         bbox = BBox(*font.getbbox(char, direction=None, features=None, language=None))
         adjusted_bbox = BBox(bbox[0]+x_offset, bbox[1], bbox[2]+x_offset, bbox[3])
         bboxes.append(adjusted_bbox)
-        if debug:
-            draw.rectangle(adjusted_bbox, fill=None, outline="red")
+        # if debug:
+        #     draw.rectangle(adjusted_bbox, fill=None, outline="red")
         x_offset += bbox.bottom_right_x - bbox.top_left_x
 
     text_img = np.asarray(text_img)
     text_img = cv2.cvtColor(text_img, cv2.COLOR_RGB2BGR)
+
+    # Create a binary mask of the text.
+    # Using Otsu's thresholding after Gaussian filtering makes the mask slighly bigger than the font.
+    # Not sure if that's desirable or not.
+    img_gray = cv2.cvtColor(text_img, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
+    text_mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    # text_mask = cv2.threshold(img_gray, 127, 255, cv2.THRESH_BINARY)[1]
 
     return text_img, text_mask, bboxes
 
@@ -94,6 +105,12 @@ def place_text(img: np.ndarray, font: ImageFont, text: str, debug: bool = False)
     # From the pregenerated region, filter the one that can be used.
 
     text_img, text_mask, bboxes = render_text(font, text, debug=debug)
+
+    mask = 255 * np.ones(text_img.shape, text_img.dtype)
+    width, height, channels = img.shape
+    center = (height//2, width//2)
+    output = cv2.seamlessClone(text_img, img, mask, center, cv2.MIXED_CLONE)
+    show_img(output)
 
     # # Poisson Image Editing
     # # Read images : src image will be cloned into dst
@@ -141,5 +158,5 @@ if __name__ == "__main__":
         font = sample_font(font_dir)
         img = place_text(img, font, "hello国", debug=True)
 
-        show_img(img_path.name, img)
+        show_img(img, img_path.name)
         break

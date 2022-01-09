@@ -17,12 +17,12 @@ def clean_print(msg: str, fallback: Optional[tuple[int, int]] = (156, 38), end='
     print(msg + ' ' * (get_terminal_size(fallback=fallback).columns - len(msg)), end=end, flush=True)
 
 
-def show_img(window_name: str, img: np.ndarray):
+def show_img(img: np.ndarray, window_name: str = "Image"):
     """Displays an image until the user presses the "q" key.
 
     Args:
-        window_name (str): The name of the window in which the image will be displayed.
         img: The image that is to be displayed.
+        window_name (str): The name of the window in which the image will be displayed.
     """
     while True:
         cv2.imshow(window_name, img)
