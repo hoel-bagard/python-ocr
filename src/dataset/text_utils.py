@@ -37,52 +37,46 @@ def sample_font(font_dir: Path, jp_only: bool = True) -> ImageFont:
 
 
 def render_text(font: ImageFont,
-                text: str,
-                debug: bool = False) -> tuple[np.ndarray, np.ndarray, list[tuple[int, int, int, int]]]:
+                text: str) -> tuple[np.ndarray, np.ndarray, list[BBox]]:
     """Render text using the given font. Also compute the text's mask and bounding boxes.
 
     Args:
         font: The font to use.
         text: The text to render.
-        debug: If true, then draw the bounding boxes aroung the characters.
 
     Returns:
         An image with the rendered text, along with the corresponding mask and charater bounding boxes.
     """
-    text_img = Image.new("RGB", (500, 100))
+    size = font.getsize(text)
+    print(size)
+
+    text_img = Image.new("RGB", size)
     draw = ImageDraw.Draw(text_img)
-    xy = (0, 0)
-    draw.text(xy, text, font=font)
+    random_color = tuple(np.random.choice(range(256), size=3))  # TODO: have the color depend on the background
+    random_color = (255, 255, 255)
+    draw.text((0, 0), text, fill=random_color, font=font)
 
     # Get the masks and bbox for the font
     x_offset = 0  # Tracks the place of successive characters.
-    bboxes: list[tuple[int, int, int, int]] = []
+    bboxes: list[BBox] = []
     for char in text:
-        # Can't figure out to use that function.......
-        # https://pillow.readthedocs.io/en/stable/reference/ImageFont.html#PIL.ImageFont.FreeTypeFont.getmask
-        # text_mask = font.getmask(char)
-        # print(dir(text_mask))
-
         # See also: https://github.com/python-pillow/Pillow/issues/3921
         # TODO: adjust the direction
         # TODO: y_offset for multiple lines
         bbox = BBox(*font.getbbox(char, direction=None, features=None, language=None))
         adjusted_bbox = BBox(bbox[0]+x_offset, bbox[1], bbox[2]+x_offset, bbox[3])
         bboxes.append(adjusted_bbox)
-        # if debug:
-        #     draw.rectangle(adjusted_bbox, fill=None, outline="red")
         x_offset += bbox.bottom_right_x - bbox.top_left_x
 
     text_img = np.asarray(text_img)
     text_img = cv2.cvtColor(text_img, cv2.COLOR_RGB2BGR)
 
-    # Create a binary mask of the text.
-    # Using Otsu's thresholding after Gaussian filtering makes the mask slighly bigger than the font.
-    # Not sure if that's desirable or not.
-    img_gray = cv2.cvtColor(text_img, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
-    text_mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    # text_mask = cv2.threshold(img_gray, 127, 255, cv2.THRESH_BINARY)[1]
+    # Create a mask of the text. By just redrawing it in black and white.
+    text_mask = Image.new('1', size, color=0)
+    draw = ImageDraw.Draw(text_mask)
+    # The mask's stroke width needs to be much bigger than the actual stroke width fot the seamless cloning to work.
+    draw.text((0, 0), text, fill=1, font=font, stroke_width=5)
+    text_mask = np.asarray(text_mask, dtype=np.uint8)*255
 
     return text_img, text_mask, bboxes
 
@@ -104,35 +98,20 @@ def place_text(img: np.ndarray, font: ImageFont, text: str, debug: bool = False)
     # original:
     # From the pregenerated region, filter the one that can be used.
 
-    text_img, text_mask, bboxes = render_text(font, text, debug=debug)
-
-    mask = 255 * np.ones(text_img.shape, text_img.dtype)
-    width, height, channels = img.shape
-    center = (height//2, width//2)
-    output = cv2.seamlessClone(text_img, img, mask, center, cv2.MIXED_CLONE)
-    show_img(output)
+    text_img, text_mask, bboxes = render_text(font, text)
 
     # # Poisson Image Editing
-    # # Read images : src image will be cloned into dst
-    # img = cv2.imread("images/wood-texture.jpg")
-    # obj = cv2.imread("images/iloveyouticket.jpg")
+    width, height, channels = img.shape
+    text_center = (height//2, width//2)
+    img = cv2.seamlessClone(text_img, img, text_mask, text_center, cv2.MIXED_CLONE)
 
-    # # Create an all white mask
-    # mask = 255 * np.ones(obj.shape, obj.dtype)
+    if debug:
+        char_bbox: BBox
+        for char_bbox in bboxes:
+            top_left = np.asarray(char_bbox[:2]) + np.asarray(text_center) - np.asarray(text_img.shape[:2][::-1])//2
+            bottom_right = np.asarray(char_bbox[2:]) + np.asarray(text_center) - np.asarray(text_img.shape[:2][::-1])//2
+            cv2.rectangle(img, top_left, bottom_right, (0, 0, 255), thickness=2, lineType=cv2.LINE_4)
 
-    # # The location of the center of the src in the dst
-    # width, height, channels = im.shape
-    # center = (height/2, width/2)
-
-    # # Seamlessly clone src into dst and put the results in output
-    # normal_clone = cv2.seamlessClone(obj, im, mask, center, cv2.NORMAL_CLONE)
-    # mixed_clone = cv2.seamlessClone(obj, im, mask, center, cv2.MIXED_CLONE)
-
-    # # Write results
-    # cv2.imwrite("images/opencv-normal-clone-example.jpg", normal_clone)
-    # cv2.imwrite("images/opencv-mixed-clone-example.jpg", mixed_clone)
-
-    return text_img
     return img
 
 
@@ -159,4 +138,3 @@ if __name__ == "__main__":
         img = place_text(img, font, "hello国", debug=True)
 
         show_img(img, img_path.name)
-        break
