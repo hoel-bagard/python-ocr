@@ -9,4 +9,5 @@ __pycache__/
 venv
 logs
 data
+datasets
 src/dataset/fonts
