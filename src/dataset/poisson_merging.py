@@ -6,7 +6,7 @@ I would recommend first reading the paper: "Poisson Image Editing" by Patrick Pe
 Then this blog post to help clarify things: https://erkaman.github.io/posts/poisson_blending.html,
 and then go back to the original paper.
 
-Code is taken and slightly modified from these two repos:
+Code is taken and slightly modified from this repo:
 https://github.com/gachiemchiep/SynthText/blob/master/poisson_reconstruct.py
 """
 from pathlib import Path
@@ -44,7 +44,7 @@ def poisson_edit_old(source: np.ndarray, target: np.ndarray, mask: np.ndarray, o
     x_range = x_max - x_min
     y_range = y_max - y_min
 
-    mat_m = np.float32([[1, 0, offset[0]], [0, 1, offset[1]]])
+    mat_m = np.asarray([[1, 0, offset[0]], [0, 1, offset[1]]], dtype=np.float32)
     source = cv2.warpAffine(source, mat_m, (x_range, y_range))
 
     def laplacian_matrix(n: int, m: int):
@@ -59,7 +59,7 @@ def poisson_edit_old(source: np.ndarray, target: np.ndarray, mask: np.ndarray, o
             m (int):
 
         Returns:
-            The matrix TODO
+            The matrix
         """
         mat_d = scipy.sparse.lil_matrix((m, m))
         mat_d.setdiag(-1, -1)
@@ -105,13 +105,13 @@ def poisson_edit_old(source: np.ndarray, target: np.ndarray, mask: np.ndarray, o
         # f = t
         mat_b[mask_flat == 0] = target_flat[mask_flat == 0]
 
-        x = spsolve(mat_a, mat_b)
-        x = x.reshape((y_range, x_range))
-        x[x > 255] = 255
-        x[x < 0] = 0
-        x = x.astype("uint8")
+        res_img: np.ndarray = spsolve(mat_a, mat_b)
+        res_img = res_img.reshape((y_range, x_range))
+        res_img[res_img > 255] = 255
+        res_img[res_img < 0] = 0
+        res_img = res_img.astype("uint8")
 
-        target[y_min:y_max, x_min:x_max, channel] = x
+        target[y_min:y_max, x_min:x_max, channel] = res_img
 
     return target
 
@@ -163,13 +163,7 @@ def solve_poisson(laplacian: np.ndarray, boundary: np.ndarray):
     https://elonen.iki.fi/code/misc-notes/neumann-cosine/
     https://github.com/willemmanuel/poisson-image-editing/blob/master/poisson.py
     """
-    # convert to double (TODO: check if necessary):
-    laplacian: np.ndarray = laplacian.astype('float32')
-    boundary = boundary.astype('float32')
-
-    height, width = boundary.shape
-
-    # get the boundary laplacian:
+    # Get the boundary laplacian:
     laplacian_bp = np.zeros_like(laplacian)   # bp for boundary points ?
     laplacian_bp[1:-1, 1:-1] = (-4*boundary[1:-1, 1:-1]
                                 + boundary[1:-1, 2:] + boundary[1:-1, 0:-2]
@@ -188,10 +182,11 @@ def solve_poisson(laplacian: np.ndarray, boundary: np.ndarray):
     laplacian_dst = dst(dst(laplacian).T).T  # First along columns, then along rows
 
     # Normalize:
+    height, width = boundary.shape
     xx, yy = np.meshgrid(np.arange(1, width-1), np.arange(1, height-1))
     # I see where this comes from, but I didn't find the "D" notation anywhere...
-    D = (2*np.cos(np.pi*xx/(width-1))-2) + (2*np.cos(np.pi*yy/(height-1))-2)
-    laplacian_dst = laplacian_dst / D
+    mat_d = (2*np.cos(np.pi*xx/(width-1))-2) + (2*np.cos(np.pi*yy/(height-1))-2)
+    laplacian_dst = laplacian_dst / mat_d
 
     def idst(x):
         """Inverse DST. Python -> Matlab."""
@@ -208,7 +203,8 @@ def solve_poisson(laplacian: np.ndarray, boundary: np.ndarray):
     return img
 
 
-def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0, mode="max"):
+def poisson_edit(source_img: np.ndarray, target_img: np.ndarray,
+                 arcane_mode: bool = True, scale_grad: float = 1.0, mode: str = "max"):
     """Combine the two input images using poission editing.
 
     The images should be of the same size.
@@ -216,11 +212,15 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
     Args:
         source_img (np.ndarray): The source image (image with the object to insert).
         target_img (np.ndarray): The target image (image that serves as background).
+        arcane_mode (bool): If True, then uses the SynthText black magic method.
+        scale_grad (float): Source and target gradients are scaled by the value, don't change it.
+        mode (str): Must either be "max" or "blend". The user isn't expected to change it.
 
     Returns:
         The resulting image.
     """
-    assert np.all(source_img.shape == target_img.shape)
+    assert np.all(source_img.shape == target_img.shape), ("Source and target images should have the same shape, but "
+                                                          f"got shapes: {source_img.shape=} and {target_img.shape=}")
 
     # TODO: https://docs.opencv.org/3.4/d5/db5/tutorial_laplace_operator.html
     # Remove noise by blurring with a Gaussian filter
@@ -242,7 +242,7 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
         if mode == "max":
             # Find all the spots where the target (background) gradient is bigger than the source one.
             # This allows keeping the relief of the background image.
-            grad_x = source_grad_x.copy()  # TODO: copy needed ?
+            grad_x = source_grad_x.copy()
             grad_x_max = (np.abs(target_grad_x)) > np.abs(source_grad_x)
             grad_x[grad_x_max] = target_grad_x[grad_x_max]
 
@@ -250,22 +250,23 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
             gym = np.abs(target_grad_y) > np.abs(source_grad_y)
             grad_y[gym] = target_grad_y[gym]
 
-            # Not my code (code from the SynthText repo), it seems to look at the fraction of the
-            # (originally non-zero (for some arcane reason...)) source gradient that got changed by taking the max of
-            # the source and target gradients.
-            # Get gradient mixture statistics:
-            source_grad_x_idx = source_grad_x != 0
-            source_grad_y_idx = source_grad_y != 0
-            f_grad_x = (np.sum((grad_x[source_grad_x_idx] == source_grad_x[source_grad_x_idx]))
-                        / (np.sum(source_grad_x_idx)+1e-6))
-            f_grad_y = (np.sum((grad_y[source_grad_y_idx] == source_grad_y[source_grad_y_idx]))
-                        / (np.sum(source_grad_y_idx)+1e-6))
+            if arcane_mode:
+                # Not my code (code from the SynthText repo), it seems to look at the fraction of the
+                # (originally non-zero (for some arcane reason...)) source gradient that got changed by taking the max
+                # of the source and target gradients.
+                # Get gradient mixture statistics:
+                source_grad_x_idx = source_grad_x != 0
+                source_grad_y_idx = source_grad_y != 0
+                f_grad_x = (np.sum((grad_x[source_grad_x_idx] == source_grad_x[source_grad_x_idx]))
+                            / (np.sum(source_grad_x_idx)+1e-6))
+                f_grad_y = (np.sum((grad_y[source_grad_y_idx] == source_grad_y[source_grad_y_idx]))
+                            / (np.sum(source_grad_y_idx)+1e-6))
 
-            # If the change was somewhat small, then scale up the gradients and retry
-            if min(f_grad_x, f_grad_y) <= 0.35:
-                if scale_grad > 1:
-                    mode = "blend"
-                return poisson_edit(source_img, target_img, scale_grad=1.5, mode=mode)
+                # If the change was somewhat small, then scale up the gradients and retry
+                if min(f_grad_x, f_grad_y) <= 0.35:
+                    if scale_grad > 1:
+                        mode = "blend"
+                    return poisson_edit(source_img, target_img, scale_grad=1.5, mode=mode)
 
         elif mode == "blend":  # From recursive call:
             # just do an alpha blend
@@ -304,9 +305,23 @@ if __name__ == "__main__":
     source_img = cv2.imread(str(source_img_path))
     target_img = cv2.imread(str(target_img_path))
     mask = cv2.imread(str(mask_img_path), cv2.IMREAD_GRAYSCALE)
+    _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)  # Threshold just in case the mask isn't already binary
 
-    # Temp
-    target_img = cv2.resize(target_img, source_img.shape[:2][::-1], interpolation=cv2.INTER_AREA)
+    source_height, source_width, _ = source_img.shape
+    target_height, target_width, _ = target_img.shape
 
-    result_img = poisson_edit(source_img, target_img)
-    show_img(result_img)
+    # Assume that the target image is bigger than the source one.
+    # Put the source image at the center of the target one.
+    offset_x = min(target_width - source_width, (target_width - source_width) // 2)
+    offset_y = min(target_height - source_height, (target_height - source_height) // 2)
+
+    cropped_target_img = target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width]
+    result_img = poisson_edit(source_img, cropped_target_img, arcane_mode=False)
+    # Apply mask
+    mask = mask == 0
+    result_img[mask] = cropped_target_img[mask]
+    # show_img(result_img)
+
+    # Put the result on the original (i.e. non-cropped) target image.
+    target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width] = result_img
+    show_img(target_img)
