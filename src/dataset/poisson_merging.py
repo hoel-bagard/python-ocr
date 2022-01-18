@@ -13,6 +13,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import scipy.fftpack
 import scipy.sparse
 from scipy.sparse.linalg import spsolve
 
@@ -135,6 +136,10 @@ def get_gradients(img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 def get_laplacian(grad_x: np.ndarray, grad_y: np.ndarray) -> np.ndarray:
     """Compute the the x and y laplacian, given the x and y gradients.
 
+    See:
+    https://math.stackexchange.com/questions/2551899/solving-discrete-version-of-poissons-equation
+    https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Image_processing
+
     Args:
         grad_x (np.ndarray): The partial derivative along the x axis.
         grad_y (np.ndarray): The partial derivative along the y axis.
@@ -143,14 +148,67 @@ def get_laplacian(grad_x: np.ndarray, grad_y: np.ndarray) -> np.ndarray:
         The laplacian corresponding to the given derivatives.
     """
     height, width = grad_x.shape
+    # TODO: Why float32 ?!
     laplacian_x, laplacian_y = np.zeros((height, width), dtype="float32"), np.zeros((height, width), dtype="float32")
-    i, j = np.expand_dims(np.arange(0, height-1), -1), np.arange(0, width-1)
-    laplacian_x[i, j+1] = grad_x[i, j+1] - grad_x[i, j]
-    laplacian_y[i+1, j] = grad_y[i+1, j] - grad_y[i, j]
+    i, j = np.expand_dims(np.arange(1, height), -1), np.arange(1, width)
+    laplacian_x[i, j] = grad_x[i, j] - grad_x[i, j-1]
+    laplacian_y[i, j] = grad_y[i, j] - grad_y[i-1, j]
     return laplacian_x + laplacian_y
 
 
-def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0, mode='max'):
+def solve_poisson(laplacian: np.ndarray, boundary: np.ndarray):
+    """Solve poisson equation given the laplacian and the boundary.
+
+    https://scicomp.stackexchange.com/questions/12913/poisson-equation-with-neumann-boundary-conditions
+    https://elonen.iki.fi/code/misc-notes/neumann-cosine/
+    https://github.com/willemmanuel/poisson-image-editing/blob/master/poisson.py
+    """
+    # convert to double (TODO: check if necessary):
+    laplacian: np.ndarray = laplacian.astype('float32')
+    boundary = boundary.astype('float32')
+
+    height, width = boundary.shape
+
+    # get the boundary laplacian:
+    laplacian_bp = np.zeros_like(laplacian)   # bp for boundary points ?
+    laplacian_bp[1:-1, 1:-1] = (-4*boundary[1:-1, 1:-1]
+                                + boundary[1:-1, 2:] + boundary[1:-1, 0:-2]
+                                + boundary[2:, 1:-1] + boundary[0:-2, 1:-1])  # delta-x
+    laplacian = laplacian - laplacian_bp
+    laplacian = laplacian[1:-1, 1:-1]
+
+    def dst(x):
+        """Converts Scipy's DST output to Matlab's DST (scaling).
+
+        (original comment, no idea why Matlab shows up here......)
+        """
+        return scipy.fftpack.dst(x, type=1, axis=0) / 2.0
+
+    # Compute the 2D DST:
+    laplacian_dst = dst(dst(laplacian).T).T  # First along columns, then along rows
+
+    # Normalize:
+    xx, yy = np.meshgrid(np.arange(1, width-1), np.arange(1, height-1))
+    # I see where this comes from, but I didn't find the "D" notation anywhere...
+    D = (2*np.cos(np.pi*xx/(width-1))-2) + (2*np.cos(np.pi*yy/(height-1))-2)
+    laplacian_dst = laplacian_dst / D
+
+    def idst(x):
+        """Inverse DST. Python -> Matlab."""
+        n = x.shape[0]
+        x = np.real(scipy.fftpack.idst(x, type=1, axis=0))
+        return x/(n+1.0)
+
+    img_interior = idst(idst(laplacian_dst).T).T  # Inverse DST for rows and columns
+
+    img = boundary.copy()
+
+    img[1:-1, 1:-1] = img_interior
+
+    return img
+
+
+def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0, mode="max"):
     """Combine the two input images using poission editing.
 
     The images should be of the same size.
@@ -163,6 +221,10 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
         The resulting image.
     """
     assert np.all(source_img.shape == target_img.shape)
+
+    # TODO: https://docs.opencv.org/3.4/d5/db5/tutorial_laplace_operator.html
+    # Remove noise by blurring with a Gaussian filter
+    # src = cv.GaussianBlur(src, (3, 3), 0)
 
     source_img = source_img.copy().astype("float32")
     target_img = target_img.copy().astype("float32")
@@ -177,11 +239,7 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
         source_grad_x *= scale_grad
         source_grad_y *= scale_grad
 
-        gxs_idx = source_grad_x != 0
-        source_grad_y_idx = source_grad_y != 0
-
-        # mix the source and target gradients:
-        if mode == 'max':
+        if mode == "max":
             # Find all the spots where the target (background) gradient is bigger than the source one.
             # This allows keeping the relief of the background image.
             grad_x = source_grad_x.copy()  # TODO: copy needed ?
@@ -192,23 +250,39 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray, scale_grad=1.0,
             gym = np.abs(target_grad_y) > np.abs(source_grad_y)
             grad_y[gym] = target_grad_y[gym]
 
-            # get gradient mixture statistics:
-            f_grad_x = np.sum((grad_x[gxs_idx] == source_grad_x[gxs_idx]).flat) / (np.sum(gxs_idx.flat)+1e-6)
-            f_grad_y = np.sum((grad_y[source_grad_y_idx] == source_grad_y[source_grad_y_idx]).flat) / (np.sum(source_grad_y_idx.flat)+1e-6)
+            # Not my code (code from the SynthText repo), it seems to look at the fraction of the
+            # (originally non-zero (for some arcane reason...)) source gradient that got changed by taking the max of
+            # the source and target gradients.
+            # Get gradient mixture statistics:
+            source_grad_x_idx = source_grad_x != 0
+            source_grad_y_idx = source_grad_y != 0
+            f_grad_x = (np.sum((grad_x[source_grad_x_idx] == source_grad_x[source_grad_x_idx]))
+                        / (np.sum(source_grad_x_idx)+1e-6))
+            f_grad_y = (np.sum((grad_y[source_grad_y_idx] == source_grad_y[source_grad_y_idx]))
+                        / (np.sum(source_grad_y_idx)+1e-6))
+
+            # If the change was somewhat small, then scale up the gradients and retry
             if min(f_grad_x, f_grad_y) <= 0.35:
-                m = 'max'
                 if scale_grad > 1:
-                    m = 'blend'
-                return poisson_edit(source_img, target_img, scale_grad=1.5, mode=m)
+                    mode = "blend"
+                return poisson_edit(source_img, target_img, scale_grad=1.5, mode=mode)
 
-        elif mode == 'blend':  # from recursive call:
+        elif mode == "blend":  # From recursive call:
             # just do an alpha blend
-            grad_x = source_grad_x+target_grad_x
-            grad_y = source_grad_y+target_grad_y
+            grad_x = source_grad_x + target_grad_x
+            grad_y = source_grad_y + target_grad_y
 
-    #     result_img[:, :, channel] = np.clip(poisson_solve(gx, gy, imd), 0, 255)
+        laplacian = get_laplacian(grad_x, grad_y)
+        boundary = target_img.copy()[:, :, channel]
 
-    # return result_img.astype('uint8')
+        # Set the interior of the boundary-image to 0:   (boundary image contains image intensities at boundaries)
+        # TODO: Is this about the Neumann boundary conditions specifying that the value of the gradient of the new
+        #       image in the direction normal to the boundary should be zero?
+        boundary[1:-1, 1:-1] = 0
+
+        result_img[:, :, channel] = np.clip(solve_poisson(laplacian, boundary), 0, 255)
+
+    return result_img.astype("uint8")
 
 
 if __name__ == "__main__":
@@ -234,12 +308,5 @@ if __name__ == "__main__":
     # Temp
     target_img = cv2.resize(target_img, source_img.shape[:2][::-1], interpolation=cv2.INTER_AREA)
 
-    poisson_edit(source_img, target_img)
-
-    # The mask is expected to have the same shape as the target.
-    # # mask = cv2.resize(mask, target_img.shape[:2][::-1], interpolation=cv2.INTER_AREA)
-    # mask[mask != 0] = 1  # Make mask binary
-    # offset = (0, 66)
-    # result = poisson_edit(source_img, target_img, mask, offset)
-
-    # show_img(result)
+    result_img = poisson_edit(source_img, target_img)
+    show_img(result_img)
