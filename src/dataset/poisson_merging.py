@@ -287,41 +287,43 @@ def poisson_edit(source_img: np.ndarray, target_img: np.ndarray,
 
 
 if __name__ == "__main__":
-    from argparse import ArgumentParser
-    parser = ArgumentParser(description=("Script to merge to images using poissong editing."
-                                         "Run with 'python -m src.dataset.poisson_merging <path>'."))
-    parser.add_argument("target_img_path", type=Path, help="Path to the target image (i.e. the background).")
-    parser.add_argument("--source_img_path", "-s", type=Path, default=Path("data/poisson_source.jpg"),
-                        help="Path to the source image (part to copy/paste).")
-    parser.add_argument("--mask_img_path", "-m", type=Path, default=Path("data/poisson_mask.png"),
-                        help="Path to the mask corresponding to the source image.")
-    parser.add_argument("--debug", "-d", action="store_true", help="Debug mode")
-    args = parser.parse_args()
+    def test_fn():
+        from argparse import ArgumentParser
+        parser = ArgumentParser(description=("Script to merge to images using poissong editing."
+                                             "Run with 'python -m src.dataset.poisson_merging <path>'."))
+        parser.add_argument("target_img_path", type=Path, help="Path to the target image (i.e. the background).")
+        parser.add_argument("--source_img_path", "-s", type=Path, default=Path("data/poisson_source.jpg"),
+                            help="Path to the source image (part to copy/paste).")
+        parser.add_argument("--mask_img_path", "-m", type=Path, default=Path("data/poisson_mask.png"),
+                            help="Path to the mask corresponding to the source image.")
+        parser.add_argument("--debug", "-d", action="store_true", help="Debug mode")
+        args = parser.parse_args()
 
-    target_img_path: Path = args.target_img_path
-    source_img_path: Path = args.source_img_path
-    mask_img_path: Path = args.mask_img_path
+        target_img_path: Path = args.target_img_path
+        source_img_path: Path = args.source_img_path
+        mask_img_path: Path = args.mask_img_path
 
-    source_img = cv2.imread(str(source_img_path))
-    target_img = cv2.imread(str(target_img_path))
-    mask = cv2.imread(str(mask_img_path), cv2.IMREAD_GRAYSCALE)
-    _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)  # Threshold just in case the mask isn't already binary
+        source_img = cv2.imread(str(source_img_path))
+        target_img = cv2.imread(str(target_img_path))
+        mask = cv2.imread(str(mask_img_path), cv2.IMREAD_GRAYSCALE)
+        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)  # Just in case the mask isn't already binary
 
-    source_height, source_width, _ = source_img.shape
-    target_height, target_width, _ = target_img.shape
+        source_height, source_width, _ = source_img.shape
+        target_height, target_width, _ = target_img.shape
 
-    # Assume that the target image is bigger than the source one.
-    # Put the source image at the center of the target one.
-    offset_x = min(target_width - source_width, (target_width - source_width) // 2)
-    offset_y = min(target_height - source_height, (target_height - source_height) // 2)
+        # Assume that the target image is bigger than the source one.
+        # Put the source image at the center of the target one.
+        offset_x = min(target_width - source_width, (target_width - source_width) // 2)
+        offset_y = min(target_height - source_height, (target_height - source_height) // 2)
 
-    cropped_target_img = target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width]
-    result_img = poisson_edit(source_img, cropped_target_img, arcane_mode=False)
-    # Apply mask
-    mask = mask == 0
-    result_img[mask] = cropped_target_img[mask]
-    # show_img(result_img)
+        cropped_target_img = target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width]
+        result_img = poisson_edit(source_img, cropped_target_img, arcane_mode=True)
+        # Apply mask
+        mask = mask == 0
+        result_img[mask] = cropped_target_img[mask]
+        # show_img(result_img)
 
-    # Put the result on the original (i.e. non-cropped) target image.
-    target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width] = result_img
-    show_img(target_img)
+        # Put the result on the original (i.e. non-cropped) target image.
+        target_img[offset_y:offset_y+source_height, offset_x:offset_x+source_width] = result_img
+        show_img(target_img)
+    test_fn()

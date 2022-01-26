@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from src.utils.misc import clean_print, show_img
+from src.dataset.poisson_merging import poisson_edit
 
 
 class BBox(NamedTuple):
@@ -97,19 +98,41 @@ def place_text(img: np.ndarray, font: ImageFont, text: str, debug: bool = False)
 
     text_img, text_mask, bboxes = render_text(font, text)
 
-    # Poisson Image Editing
     width, height, _ = img.shape
     text_center = (height//2, width//2)
-    mask = np.full_like(text_mask, 255)
-    merged_img = cv2.seamlessClone(text_img, img, mask, text_center, cv2.MIXED_CLONE)
+    # Poisson Image Editing
+    if True:
 
-    # The seamless cloning doesn't work really well: the background stays in part and creates artifacts (shadows)
-    # Since we have an exact mask of the text, we can remove the artifacts.
-    my_mask = np.asarray(np.where(text_mask != 255))
-    my_mask += np.expand_dims(np.asarray(text_center)[::-1] - np.asarray(text_img.shape[:2])//2, axis=-1)
-    my_mask = tuple(my_mask)
-    merged_img[my_mask] = img[my_mask]
-    img = merged_img
+        source_height, source_width, _ = text_img.shape
+        target_height, target_width, _ = img.shape
+
+        # Assume that the target image is bigger than the source one.
+        if np.any(img.shape < text_img.shape):  # TODO: make sure text isn't generated too big (or re-generate)
+            print(f"Image has shape {img.shape}, but the generated text was bigger: {text_img.shape}. Skipping.")
+            return img
+        # Put the source image at the center of the target one.
+        offset_x = min(target_width - source_width, (target_width - source_width) // 2)
+        offset_y = min(target_height - source_height, (target_height - source_height) // 2)
+
+        cropped_img = img[offset_y:offset_y+source_height, offset_x:offset_x+source_width]
+        result_img = poisson_edit(text_img, cropped_img, arcane_mode=True)
+        # Apply mask (doesn't seem to be necessary ?)
+        # mask = text_mask == 0
+        # result_img[mask] = cropped_img[mask]
+
+        # Put the result on the original (i.e. non-cropped) target image.
+        img[offset_y:offset_y+source_height, offset_x:offset_x+source_width] = result_img
+    if False:  # OpenCV way
+        mask = np.full_like(text_mask, 255)
+        merged_img = cv2.seamlessClone(text_img, img, mask, text_center, cv2.MIXED_CLONE)
+
+        # The seamless cloning doesn't work really well: the background stays in part and creates artifacts (shadows)
+        # Since we have an exact mask of the text, we can remove the artifacts.
+        my_mask = np.asarray(np.where(text_mask != 255))
+        my_mask += np.expand_dims(np.asarray(text_center)[::-1] - np.asarray(text_img.shape[:2])//2, axis=-1)
+        my_mask = tuple(my_mask)
+        merged_img[my_mask] = img[my_mask]
+        img = merged_img
 
     # Draw the bounding boxes if needed
     if debug:
