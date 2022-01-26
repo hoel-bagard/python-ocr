@@ -53,7 +53,9 @@ def main():
     df = pd.read_csv(filename, sep='\t', header=0)
 
     for i in range(nb_imgs := len(df["photo_image_url"])):
-        msg = f"Processing image {i+1}/{nb_imgs}  (decription : {df['photo_description'][i]})"
+        description = str(df["photo_description"][i])
+        description = description if len(description) < 100 else description[:100] + "..."
+        msg = f"Processing image {i+1}/{nb_imgs}    description : {description}"
         print(msg + ' ' * (get_terminal_size(fallback=(156, 38)).columns - len(msg)), end='\r')
 
         img_url = df["photo_image_url"][i] + "?fm=jpg&w=1080&q=85&fit=max"
@@ -62,7 +64,7 @@ def main():
         img = cv2.imdecode(arr, -1)
 
         if output_path:
-            cv2.imwrite(str(output_path / f"./out_{i}.jpg"), img)
+            cv2.imwrite(str(output_path / f"./image_{i}.jpg"), img)
         if show_imgs:
             show_img(img)
 
