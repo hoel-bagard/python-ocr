@@ -8,6 +8,7 @@
   - [This PyTorch implementation](https://github.com/lejeunel/cobnet) might be worth looking at. Not documentation or answer from the author though.
 - [ ] The [Image Segmentation Using Hierarchical Merge Tree paper](https://arxiv.org/pdf/1505.06389.pdf) seems to build uppon the previous paper, and does give the [C++ code](https://github.com/tingliu/glia). (would require making a python wrapping)
 - [ ] [This paper](https://arxiv.org/pdf/1603.04530v1.pdf) seems simpler (auto-encoder), but detects objects rather than boudaries. ([code](https://github.com/captanlevi/Contour-Detection-Pytorch))
+- [x] Holistically-Nested Edge Detection paper (code [here](https://github.com/s9xie/hed)) uses Caffe, no thanks.
 - [ ] [This github](https://github.com/MarkMoHR/Awesome-Edge-Detection-Papers) contains a list of edge detection papers.
 
 Note: OpenCV also has a [function to detect contours](https://docs.opencv.org/3.4/df/d0d/tutorial_find_contours.html) (there is even [a tutorial](https://learnopencv.com/contour-detection-using-opencv-python-c/)). However it doesn't seem like it would be good enough.
