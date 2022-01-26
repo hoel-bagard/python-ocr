@@ -65,8 +65,6 @@ def main():
             cv2.imwrite(str(output_path / f"./out_{i}.jpg"), img)
         if show_imgs:
             show_img(img)
-        if i > 5:
-            break
 
     print("\nFinished processing the dataset.")
 
