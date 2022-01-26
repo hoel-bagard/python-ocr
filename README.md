@@ -11,6 +11,20 @@ The [ICDAR challenges](https://rrc.cvc.uab.es/?ch=2) are also notable and can be
 #### Unsplash
 The Lite Unsplash dataset is [explicitely free for commercial use](https://unsplash.com/data). It can be downloaded from [this link](https://unsplash.com/data/lite/latest), the github is [here](https://github.com/unsplash/datasets) and the documentation for the data format [here](https://github.com/unsplash/datasets/blob/master/DOCS.md). 
 
+Example on how to get it:
+```
+wget https://unsplash.com/data/lite/latest -P datasets
+unzip datasets/lastest -d datasets/unsplash
+rm datasets/lastest
+```
+
+You can then use the `unsplash.py` utils script to visualize some images or to download them:
+```
+python utils/unsplash.py datasets/unsplash -s
+python utils/unsplash.py datasets/unsplash -o datasets/unsplash_images
+```
+(first command simply shows the images, second one saves them to disk. They can be combined.)
+
 ### Making some labelled data
 I'm following the approach from the [Synthetic Data for Text Localisation in Natural Images](https://arxiv.org/pdf/1604.06646.pdf) paper (paper that created the SynthText dataset). Due to the ultimate goal of this project not being set in the usual "real world" setting, I'm going for non DL approaches.
 
