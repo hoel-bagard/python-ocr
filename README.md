@@ -14,8 +14,8 @@ The Lite Unsplash dataset is [explicitely free for commercial use](https://unspl
 Example on how to get it:
 ```
 wget https://unsplash.com/data/lite/latest -P datasets
-unzip datasets/lastest -d datasets/unsplash
-rm datasets/lastest
+unzip datasets/latest -d datasets/unsplash
+rm datasets/latest
 ```
 
 You can then use the `unsplash.py` utils script to visualize some images or to download them:
