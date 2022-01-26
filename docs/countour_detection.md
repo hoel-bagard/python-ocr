@@ -14,7 +14,7 @@ Note: OpenCV also has a [function to detect contours](https://docs.opencv.org/3.
 
 
 ### What I tried to far
-- I tested [this gPb implementation](https://github.com/hoel-bagard/gPb-GSoC) since it gave a python wrapper, but it's slow, crahes halfway through and prone to segfaults.
+- I tested [this gPb implementation](https://github.com/hoel-bagard/gPb-GSoC) since it gave a python wrapper, but it's slow, crashes halfway through and prone to segfaults.
 - I tested the [mcg used for the SynthText dataset](https://github.com/jponttuset/mcg), but I couldn't get it to work (see the rant).
 - I tested (trained) [the pytorch implementation of COB](https://github.com/hoel-bagard/cobnet?organization=hoel-bagard&organization=hoel-bagard), but the results as good as advertised.
 
